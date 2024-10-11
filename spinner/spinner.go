@@ -29,6 +29,7 @@ type Spinner struct {
 	output     *termenv.Output
 	title      string
 	titleStyle lipgloss.Style
+	teaOptions []tea.ProgramOption
 }
 
 type Type spinner.Spinner
@@ -87,6 +88,12 @@ func (s *Spinner) TitleStyle(style lipgloss.Style) *Spinner {
 // Accessible sets the spinner to be static.
 func (s *Spinner) Accessible(accessible bool) *Spinner {
 	s.accessible = accessible
+	return s
+}
+
+// ProgramOptions sets the tea program options of the spinner.
+func (s *Spinner) ProgramOptions(opts ...tea.ProgramOption) *Spinner {
+	s.teaOptions = opts
 	return s
 }
 
@@ -153,7 +160,8 @@ func (s *Spinner) Run() error {
 		return s.ctx.Err()
 	}
 
-	p := tea.NewProgram(s, tea.WithContext(s.ctx), tea.WithOutput(os.Stderr))
+	s.teaOptions = append(s.teaOptions, tea.WithContext(s.ctx), tea.WithOutput(os.Stderr))
+	p := tea.NewProgram(s, s.teaOptions...)
 	if s.ctx == nil {
 		go func() {
 			s.action()

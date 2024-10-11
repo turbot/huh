@@ -2,13 +2,16 @@ package spinner
 
 import (
 	"context"
-	"reflect"
-	"strings"
-	"testing"
-
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"os"
+	"os/signal"
+	"reflect"
+	"strings"
+	"syscall"
+	"testing"
+	"time"
 )
 
 func TestNewSpinner(t *testing.T) {
@@ -110,5 +113,43 @@ func TestAccessibleSpinner(t *testing.T) {
 	err := s.Run()
 	if err != nil {
 		t.Errorf("Run() in accessible mode returned an error: %v", err)
+	}
+}
+
+func TestSpinnerWithoutSignalHandling(t *testing.T) {
+	s := New().ProgramOptions(tea.WithoutSignalHandler())
+
+	// Action function that simulates a long-running task
+	a := func() {
+		time.Sleep(10 * time.Second)
+		t.Errorf("This should not be executed")
+	}
+
+	// Channel to capture OS signals
+	sigs := make(chan os.Signal, 1)
+	done := make(chan error, 1)
+	signal.Notify(sigs, syscall.SIGINT)
+
+	go func() {
+		// Run the spinner with the action
+		done <- s.Action(a).Run()
+	}()
+	go func() {
+		time.Sleep(1 * time.Second)
+		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+	}()
+
+	// Wait for either the spinner to complete or a signal
+	select {
+	case <-sigs:
+		// If we received a signal, pass the test and stop the spinner
+		t.Log("Received SIGINT as expected")
+	case err := <-done:
+		// If the spinner completed without being interrupted, fail the test
+		if err == nil {
+			t.Errorf("Expected Run() to be interrupted by SIGINT, but it completed without error")
+		} else {
+			t.Errorf("Unexpected error: %v", err)
+		}
 	}
 }
